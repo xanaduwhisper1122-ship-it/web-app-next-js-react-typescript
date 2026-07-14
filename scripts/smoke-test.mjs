@@ -1,16 +1,63 @@
-import { dailyPlans, lessons } from "../src/data/lessons.ts";
-import { REWARD_NAME, levelRules, rewardRules, xpRules } from "../src/data/config.ts";
-import { badgeDefinitions } from "../src/data/rewards/badges.ts";
-import { companionRewards, encouragementRules } from "../src/data/rewards/rewardRules.ts";
-import {
-  allQuestions,
-  charQuestions,
-  chatQuestions,
-  choiceQuestions,
-  wordQuestions
-} from "../src/data/questions.ts";
-import { expansionSummary } from "../src/data/expandedQuestions.ts";
-import {
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import ts from "typescript";
+
+const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const compiledDir = path.join(os.tmpdir(), `dada-alu-smoke-${process.pid}`);
+const sourceFiles = [
+  "src/data/config.ts",
+  "src/data/rewards/badges.ts",
+  "src/data/rewards/rewardRules.ts",
+  "src/data/expandedQuestions.ts",
+  "src/data/questions.ts",
+  "src/data/lessons.ts",
+  "src/lib/progress.ts"
+];
+
+for (const relativePath of sourceFiles) {
+  const sourcePath = path.join(rootDir, relativePath);
+  const outputPath = path.join(compiledDir, relativePath).replace(/\.ts$/, ".js");
+  const source = fs.readFileSync(sourcePath, "utf8");
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ES2022,
+      target: ts.ScriptTarget.ES2022,
+      verbatimModuleSyntax: false
+    },
+    fileName: sourcePath
+  }).outputText.replace(/(\.ts)(["'])/g, ".js$2");
+
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, transpiled);
+}
+
+const [
+  lessonsModule,
+  configModule,
+  badgesModule,
+  rewardRulesModule,
+  questionsModule,
+  expandedQuestionsModule,
+  progressModule
+] = await Promise.all([
+  import(pathToFileURL(path.join(compiledDir, "src/data/lessons.js")).href),
+  import(pathToFileURL(path.join(compiledDir, "src/data/config.js")).href),
+  import(pathToFileURL(path.join(compiledDir, "src/data/rewards/badges.js")).href),
+  import(pathToFileURL(path.join(compiledDir, "src/data/rewards/rewardRules.js")).href),
+  import(pathToFileURL(path.join(compiledDir, "src/data/questions.js")).href),
+  import(pathToFileURL(path.join(compiledDir, "src/data/expandedQuestions.js")).href),
+  import(pathToFileURL(path.join(compiledDir, "src/lib/progress.js")).href)
+]);
+
+const { dailyPlans, lessons } = lessonsModule;
+const { REWARD_NAME, levelRules, rewardRules, xpRules } = configModule;
+const { badgeDefinitions } = badgesModule;
+const { companionRewards, encouragementRules } = rewardRulesModule;
+const { allQuestions, charQuestions, chatQuestions, choiceQuestions, wordQuestions } = questionsModule;
+const { expansionSummary } = expandedQuestionsModule;
+const {
   addEncouragement,
   calculateStreak,
   createInitialProgress,
@@ -21,7 +68,7 @@ import {
   normalizeInput,
   redeemCompanionReward,
   unlockBadges
-} from "../src/lib/progress.ts";
+} = progressModule;
 
 function assert(condition, message) {
   if (!condition) {
